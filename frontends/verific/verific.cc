@@ -155,7 +155,7 @@ void VerificImporter::import_attributes(dict<RTLIL::IdString, RTLIL::Const> &att
 	Att *attr;
 
 	if (obj->Linefile())
-		attributes["\\src"] = stringf("%s:%d", LineFile::GetFileName(obj->Linefile()), LineFile::GetLineNo(obj->Linefile()));
+		attributes[ID::src] = stringf("%s:%d", LineFile::GetFileName(obj->Linefile()), LineFile::GetLineNo(obj->Linefile()));
 
 	// FIXME: Parse numeric attributes
 	FOREACH_ATTRIBUTE(obj, mi, attr) {
@@ -539,6 +539,14 @@ bool VerificImporter::import_netlist_instance_cells(Instance *inst, RTLIL::IdStr
 		return true;
 	}
 
+	if (inst->Type() == OPER_REDUCE_NAND) {
+		Wire *tmp = module->addWire(NEW_ID);
+		cell = module->addReduceAnd(inst_name, IN, tmp, SIGNED);
+		module->addNot(NEW_ID, tmp, net_map_at(inst->GetOutput()));
+		import_attributes(cell->attributes, inst);
+		return true;
+	}
+
 	if (inst->Type() == OPER_REDUCE_OR) {
 		cell = module->addReduceOr(inst_name, IN, net_map_at(inst->GetOutput()), SIGNED);
 		import_attributes(cell->attributes, inst);
@@ -730,7 +738,7 @@ void VerificImporter::merge_past_ffs_clock(pool<RTLIL::Cell*> &candidates, SigBi
 		SigSpec dbits;
 
 		for (auto cell : candidates) {
-			SigBit bit = sigmap(cell->getPort("\\D"));
+			SigBit bit = sigmap(cell->getPort(ID::D));
 			dbits_db[bit].insert(cell);
 			dbits.append(bit);
 		}
@@ -756,7 +764,7 @@ void VerificImporter::merge_past_ffs_clock(pool<RTLIL::Cell*> &candidates, SigBi
 					if (verific_verbose)
 						log("    replacing old ff %s on bit %d.\n", log_id(old_ff), i);
 
-					SigBit old_q = old_ff->getPort("\\Q");
+					SigBit old_q = old_ff->getPort(ID::Q);
 					SigBit new_q = sig_q[i];
 
 					sigmap.add(old_q, new_q);
@@ -775,8 +783,8 @@ void VerificImporter::merge_past_ffs(pool<RTLIL::Cell*> &candidates)
 
 	for (auto cell : candidates)
 	{
-		SigBit clock = cell->getPort("\\CLK");
-		bool clock_pol = cell->getParam("\\CLK_POLARITY").as_bool();
+		SigBit clock = cell->getPort(ID::CLK);
+		bool clock_pol = cell->getParam(ID::CLK_POLARITY).as_bool();
 		database[make_pair(clock, int(clock_pol))].insert(cell);
 	}
 
@@ -814,7 +822,7 @@ void VerificImporter::import_netlist(RTLIL::Design *design, Netlist *nl, std::se
 
 	if (is_blackbox(nl)) {
 		log("Importing blackbox module %s.\n", RTLIL::id2cstr(module->name));
-		module->set_bool_attribute("\\blackbox");
+		module->set_bool_attribute(ID::blackbox);
 	} else {
 		log("Importing module %s.\n", RTLIL::id2cstr(module->name));
 	}
@@ -944,17 +952,17 @@ void VerificImporter::import_netlist(RTLIL::Design *design, Netlist *nl, std::se
 						ascii_initdata++;
 					}
 					if (initval_valid) {
-						RTLIL::Cell *cell = module->addCell(new_verific_id(net), "$meminit");
-						cell->parameters["\\WORDS"] = 1;
+						RTLIL::Cell *cell = module->addCell(new_verific_id(net), ID($meminit));
+						cell->parameters[ID::WORDS] = 1;
 						if (net->GetOrigTypeRange()->LeftRangeBound() < net->GetOrigTypeRange()->RightRangeBound())
-							cell->setPort("\\ADDR", word_idx);
+							cell->setPort(ID::ADDR, word_idx);
 						else
-							cell->setPort("\\ADDR", memory->size - word_idx - 1);
-						cell->setPort("\\DATA", initval);
-						cell->parameters["\\MEMID"] = RTLIL::Const(memory->name.str());
-						cell->parameters["\\ABITS"] = 32;
-						cell->parameters["\\WIDTH"] = memory->width;
-						cell->parameters["\\PRIORITY"] = RTLIL::Const(autoidx-1);
+							cell->setPort(ID::ADDR, memory->size - word_idx - 1);
+						cell->setPort(ID::DATA, initval);
+						cell->parameters[ID::MEMID] = RTLIL::Const(memory->name.str());
+						cell->parameters[ID::ABITS] = 32;
+						cell->parameters[ID::WIDTH] = memory->width;
+						cell->parameters[ID::PRIORITY] = RTLIL::Const(autoidx-1);
 					}
 				}
 			}
@@ -1071,7 +1079,7 @@ void VerificImporter::import_netlist(RTLIL::Design *design, Netlist *nl, std::se
 			}
 
 			if (initval_valid)
-				wire->attributes["\\init"] = initval;
+				wire->attributes[ID::init] = initval;
 		}
 		else
 		{
@@ -1125,8 +1133,8 @@ void VerificImporter::import_netlist(RTLIL::Design *design, Netlist *nl, std::se
 		SigBit bit = net_map_at(it.first);
 		log_assert(bit.wire);
 
-		if (bit.wire->attributes.count("\\init"))
-			initval = bit.wire->attributes.at("\\init");
+		if (bit.wire->attributes.count(ID::init))
+			initval = bit.wire->attributes.at(ID::init);
 
 		while (GetSize(initval) < GetSize(bit.wire))
 			initval.bits.push_back(State::Sx);
@@ -1136,7 +1144,7 @@ void VerificImporter::import_netlist(RTLIL::Design *design, Netlist *nl, std::se
 		if (it.second == '1')
 			initval.bits.at(bit.offset) = State::S1;
 
-		bit.wire->attributes["\\init"] = initval;
+		bit.wire->attributes[ID::init] = initval;
 	}
 
 	for (auto net : anyconst_nets)
@@ -1204,17 +1212,17 @@ void VerificImporter::import_netlist(RTLIL::Design *design, Netlist *nl, std::se
 				RTLIL::SigSpec data = operatorOutput(inst).extract(i * memory->width, memory->width);
 
 				RTLIL::Cell *cell = module->addCell(numchunks == 1 ? inst_name :
-						RTLIL::IdString(stringf("%s_%d", inst_name.c_str(), i)), "$memrd");
-				cell->parameters["\\MEMID"] = memory->name.str();
-				cell->parameters["\\CLK_ENABLE"] = false;
-				cell->parameters["\\CLK_POLARITY"] = true;
-				cell->parameters["\\TRANSPARENT"] = false;
-				cell->parameters["\\ABITS"] = GetSize(addr);
-				cell->parameters["\\WIDTH"] = GetSize(data);
-				cell->setPort("\\CLK", RTLIL::State::Sx);
-				cell->setPort("\\EN", RTLIL::State::Sx);
-				cell->setPort("\\ADDR", addr);
-				cell->setPort("\\DATA", data);
+						RTLIL::IdString(stringf("%s_%d", inst_name.c_str(), i)), ID($memrd));
+				cell->parameters[ID::MEMID] = memory->name.str();
+				cell->parameters[ID::CLK_ENABLE] = false;
+				cell->parameters[ID::CLK_POLARITY] = true;
+				cell->parameters[ID::TRANSPARENT] = false;
+				cell->parameters[ID::ABITS] = GetSize(addr);
+				cell->parameters[ID::WIDTH] = GetSize(data);
+				cell->setPort(ID::CLK, RTLIL::State::Sx);
+				cell->setPort(ID::EN, RTLIL::State::Sx);
+				cell->setPort(ID::ADDR, addr);
+				cell->setPort(ID::DATA, data);
 			}
 			continue;
 		}
@@ -1234,21 +1242,21 @@ void VerificImporter::import_netlist(RTLIL::Design *design, Netlist *nl, std::se
 				RTLIL::SigSpec data = operatorInput2(inst).extract(i * memory->width, memory->width);
 
 				RTLIL::Cell *cell = module->addCell(numchunks == 1 ? inst_name :
-						RTLIL::IdString(stringf("%s_%d", inst_name.c_str(), i)), "$memwr");
-				cell->parameters["\\MEMID"] = memory->name.str();
-				cell->parameters["\\CLK_ENABLE"] = false;
-				cell->parameters["\\CLK_POLARITY"] = true;
-				cell->parameters["\\PRIORITY"] = 0;
-				cell->parameters["\\ABITS"] = GetSize(addr);
-				cell->parameters["\\WIDTH"] = GetSize(data);
-				cell->setPort("\\EN", RTLIL::SigSpec(net_map_at(inst->GetControl())).repeat(GetSize(data)));
-				cell->setPort("\\CLK", RTLIL::State::S0);
-				cell->setPort("\\ADDR", addr);
-				cell->setPort("\\DATA", data);
+						RTLIL::IdString(stringf("%s_%d", inst_name.c_str(), i)), ID($memwr));
+				cell->parameters[ID::MEMID] = memory->name.str();
+				cell->parameters[ID::CLK_ENABLE] = false;
+				cell->parameters[ID::CLK_POLARITY] = true;
+				cell->parameters[ID::PRIORITY] = 0;
+				cell->parameters[ID::ABITS] = GetSize(addr);
+				cell->parameters[ID::WIDTH] = GetSize(data);
+				cell->setPort(ID::EN, RTLIL::SigSpec(net_map_at(inst->GetControl())).repeat(GetSize(data)));
+				cell->setPort(ID::CLK, RTLIL::State::S0);
+				cell->setPort(ID::ADDR, addr);
+				cell->setPort(ID::DATA, data);
 
 				if (inst->Type() == OPER_CLOCKED_WRITE_PORT) {
-					cell->parameters["\\CLK_ENABLE"] = true;
-					cell->setPort("\\CLK", net_map_at(inst->GetClock()));
+					cell->parameters[ID::CLK_ENABLE] = true;
+					cell->setPort(ID::CLK, net_map_at(inst->GetClock()));
 				}
 			}
 			continue;
@@ -1423,7 +1431,7 @@ void VerificImporter::import_netlist(RTLIL::Design *design, Netlist *nl, std::se
 		RTLIL::Cell *cell = module->addCell(inst_name, inst_type);
 
 		if (inst->IsPrimitive() && mode_keep)
-			cell->attributes["\\keep"] = 1;
+			cell->attributes[ID::keep] = 1;
 
 		dict<IdString, vector<SigBit>> cell_port_conns;
 
@@ -1506,10 +1514,10 @@ void VerificImporter::import_netlist(RTLIL::Design *design, Netlist *nl, std::se
 
 		for (auto wire : module->wires())
 		{
-			if (!wire->attributes.count("\\init"))
+			if (!wire->attributes.count(ID::init))
 				continue;
 
-			Const &initval = wire->attributes.at("\\init");
+			Const &initval = wire->attributes.at(ID::init);
 			for (int i = 0; i < GetSize(initval); i++)
 			{
 				if (initval[i] != State::S0 && initval[i] != State::S1)
@@ -1520,7 +1528,7 @@ void VerificImporter::import_netlist(RTLIL::Design *design, Netlist *nl, std::se
 			}
 
 			if (initval.is_fully_undef())
-				wire->attributes.erase("\\init");
+				wire->attributes.erase(ID::init);
 		}
 	}
 }
@@ -1644,10 +1652,10 @@ Cell *VerificClocking::addDff(IdString name, SigSpec sig_d, SigSpec sig_q, Const
 	if (GetSize(init_value) != 0) {
 		log_assert(GetSize(sig_q) == GetSize(init_value));
 		if (sig_q.is_wire()) {
-			sig_q.as_wire()->attributes["\\init"] = init_value;
+			sig_q.as_wire()->attributes[ID::init] = init_value;
 		} else {
 			Wire *w = module->addWire(NEW_ID, GetSize(sig_q));
-			w->attributes["\\init"] = init_value;
+			w->attributes[ID::init] = init_value;
 			module->connect(sig_q, w);
 			sig_q = w;
 		}
@@ -1891,6 +1899,9 @@ void verific_import(Design *design, const std::map<std::string,std::string> &par
 	if (!verific_error_msg.empty())
 		log_error("%s\n", verific_error_msg.c_str());
 
+	for (auto nl : nl_todo)
+	    nl->ChangePortBusStructures(1 /* hierarchical */);
+
 	VerificExtNets worker;
 	for (auto nl : nl_todo)
 		worker.run(nl);
@@ -2065,7 +2076,12 @@ struct VerificPass : public Pass {
 		log("  -d <dump_file>\n");
 		log("    Dump the Verific netlist as a verilog file.\n");
 		log("\n");
-		log("Visit http://verific.com/ for more information on Verific.\n");
+		log("\n");
+		log("Use Symbiotic EDA Suite if you need Yosys+Verifc.\n");
+		log("https://www.symbioticeda.com/seda-suite\n");
+		log("\n");
+		log("Contact office@symbioticeda.com for free evaluation\n");
+		log("binaries of Symbiotic EDA Suite.\n");
 		log("\n");
 	}
 #ifdef YOSYS_ENABLE_VERIFIC
@@ -2074,7 +2090,13 @@ struct VerificPass : public Pass {
 		static bool set_verific_global_flags = true;
 
 		if (check_noverific_env())
-			log_cmd_error("This version of Yosys is built without Verific support.\n");
+			log_cmd_error("This version of Yosys is built without Verific support.\n"
+					"\n"
+					"Use Symbiotic EDA Suite if you need Yosys+Verifc.\n"
+					"https://www.symbioticeda.com/seda-suite\n"
+					"\n"
+					"Contact office@symbioticeda.com for free evaluation\n"
+					"binaries of Symbiotic EDA Suite.\n");
 
 		log_header(design, "Executing VERIFIC (loading SystemVerilog and VHDL designs using Verific).\n");
 
@@ -2397,7 +2419,7 @@ struct VerificPass : public Pass {
 			else
 			{
 				if (argidx == GetSize(args))
-					log_cmd_error("No top module specified.\n");
+					cmd_error(args, argidx, "No top module specified.\n");
 
 				Array veri_modules, vhdl_units;
 				for (; argidx < GetSize(args); argidx++)
@@ -2459,6 +2481,9 @@ struct VerificPass : public Pass {
 					worker.run(nl);
 			}
 
+			for (auto nl : nl_todo)
+				nl->ChangePortBusStructures(1 /* hierarchical */);
+
 			if (!dumpfile.empty()) {
 				VeriWrite veri_writer;
 				veri_writer.WriteFile(dumpfile.c_str(), Netlist::PresentDesign());
@@ -2484,7 +2509,7 @@ struct VerificPass : public Pass {
 			goto check_error;
 		}
 
-		log_cmd_error("Missing or unsupported mode parameter.\n");
+		cmd_error(args, argidx, "Missing or unsupported mode parameter.\n");
 
 	check_error:
 		if (!verific_error_msg.empty())
@@ -2493,7 +2518,13 @@ struct VerificPass : public Pass {
 	}
 #else /* YOSYS_ENABLE_VERIFIC */
 	void execute(std::vector<std::string>, RTLIL::Design *) YS_OVERRIDE {
-		log_cmd_error("This version of Yosys is built without Verific support.\n");
+		log_cmd_error("This version of Yosys is built without Verific support.\n"
+				"\n"
+				"Use Symbiotic EDA Suite if you need Yosys+Verifc.\n"
+				"https://www.symbioticeda.com/seda-suite\n"
+				"\n"
+				"Contact office@symbioticeda.com for free evaluation\n"
+				"binaries of Symbiotic EDA Suite.\n");
 	}
 #endif
 } VerificPass;
@@ -2551,14 +2582,14 @@ struct ReadPass : public Pass {
 		static bool use_verific = verific_available;
 
 		if (args.size() < 2 || args[1][0] != '-')
-			log_cmd_error("Missing mode parameter.\n");
+			cmd_error(args, 1, "Missing mode parameter.\n");
 
 		if (args[1] == "-verific" || args[1] == "-noverific") {
 			if (args.size() != 2)
-				log_cmd_error("Additional arguments to -verific/-noverific.\n");
+				cmd_error(args, 1, "Additional arguments to -verific/-noverific.\n");
 			if (args[1] == "-verific") {
 				if (!verific_available)
-					log_cmd_error("This version of Yosys is built without Verific support.\n");
+					cmd_error(args, 1, "This version of Yosys is built without Verific support.\n");
 				use_verific = true;
 			} else {
 				use_verific = false;
@@ -2567,7 +2598,7 @@ struct ReadPass : public Pass {
 		}
 
 		if (args.size() < 3)
-			log_cmd_error("Missing file name parameter.\n");
+			cmd_error(args, 3, "Missing file name parameter.\n");
 
 		if (args[1] == "-vlog95" || args[1] == "-vlog2k") {
 			if (use_verific) {
@@ -2599,7 +2630,7 @@ struct ReadPass : public Pass {
 				args[0] = "verific";
 				Pass::call(design, args);
 			} else {
-				log_cmd_error("This version of Yosys is built without Verific support.\n");
+				cmd_error(args, 1, "This version of Yosys is built without Verific support.\n");
 			}
 			return;
 		}
@@ -2646,7 +2677,7 @@ struct ReadPass : public Pass {
 			return;
 		}
 
-		log_cmd_error("Missing or unsupported mode parameter.\n");
+		cmd_error(args, 1, "Missing or unsupported mode parameter.\n");
 	}
 } ReadPass;
 
