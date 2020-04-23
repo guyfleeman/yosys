@@ -398,8 +398,8 @@ module RAM32X1D (
     .A0(A0), .A1(A1), .A2(A2), .A3(A3), .A4(A4),
     .DPRA0(DPRA0), .DPRA1(DPRA1), .DPRA2(DPRA2), .DPRA3(DPRA3), .DPRA4(DPRA4)
   );
-  $__ABC9_RAM6 spo (.A($SPO), .S({1'b1, A4, A3, A2, A1, A0}), .Y(SPO));
-  $__ABC9_RAM6 dpo (.A($DPO), .S({1'b1, DPRA4, DPRA3, DPRA2, DPRA1, DPRA0}), .Y(DPO));
+  $__ABC9_RAM5 spo (.A($SPO), .S({A4, A3, A2, A1, A0}), .Y(SPO));
+  $__ABC9_RAM5 dpo (.A($DPO), .S({DPRA4, DPRA3, DPRA2, DPRA1, DPRA0}), .Y(DPO));
 endmodule
 
 module RAM64X1D (
@@ -569,40 +569,6 @@ module SRLC16 (
     .A0(A0), .A1(A1), .A2(A2), .A3(A3), .CLK(CLK), .D(D)
   );
   $__ABC9_RAM6 q (.A($Q), .S({1'b1, A3, A2, A1, A0, 1'b1}), .Y(Q));
-endmodule
-
-module SRLC16E (
-  output Q, Q15,
-  (* techmap_autopurge *) input A0, A1, A2, A3, CE, CLK, D
-);
-  parameter [15:0] INIT = 16'h0000;
-  parameter [0:0] IS_CLK_INVERTED = 1'b0;
-  wire $Q;
-  SRLC16E #(
-    .INIT(INIT), .IS_CLK_INVERTED(IS_CLK_INVERTED)
-  ) _TECHMAP_REPLACE_ (
-    .Q($Q), .Q(Q15),
-    .A0(A0), .A1(A1), .A2(A2), .A3(A3), .CE(CE), .CLK(CLK), .D(D)
-  );
-  $__ABC9_RAM6 q (.A($Q), .S({1'b1, A3, A2, A1, A0, 1'b1}), .Y(Q));
-endmodule
-
-module SRLC32E (
-  output Q,
-  output Q31,
-  (* techmap_autopurge *) input [4:0] A,
-  (* techmap_autopurge *) input CE, CLK, D
-);
-  parameter [31:0] INIT = 32'h00000000;
-  parameter [0:0] IS_CLK_INVERTED = 1'b0;
-  wire $Q;
-  SRLC32E #(
-    .INIT(INIT), .IS_CLK_INVERTED(IS_CLK_INVERTED)
-  ) _TECHMAP_REPLACE_ (
-    .Q($Q), .Q31(Q31),
-    .A(A), .CE(CE), .CLK(CLK), .D(D)
-  );
-  $__ABC9_RAM6 q (.A($Q), .S({1'b1, A}), .Y(Q));
 endmodule
 
 module DSP48E1 (

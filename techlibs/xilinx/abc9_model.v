@@ -67,6 +67,18 @@ endmodule
 //   To model the combinatorial path, such cells have to be split
 //   into comb and seq parts, with this box modelling only the former.
 (* abc9_box *)
+module \$__ABC9_RAM5 (input A, input [4:0] S, output Y);
+  specify
+    (A    => Y) =   0;
+    (S[0] => Y) = 631;
+    (S[1] => Y) = 472;
+    (S[2] => Y) = 407;
+    (S[3] => Y) = 238;
+    (S[4] => Y) = 127;
+  endspecify
+endmodule
+
+(* abc9_box *)
 module \$__ABC9_RAM6 (input A, input [5:0] S, output Y);
   specify
     (A    => Y) =   0;

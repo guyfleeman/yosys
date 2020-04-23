@@ -29,6 +29,9 @@ module $__ABC9_FF_(input D, output Q);
   assign Q = D;
 endmodule
 
+module $__ABC9_RAM5(input A, input [5:0] S, output Y);
+  assign Y = A;
+endmodule
 module $__ABC9_RAM6(input A, input [5:0] S, output Y);
   assign Y = A;
 endmodule
