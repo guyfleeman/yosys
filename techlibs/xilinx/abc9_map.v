@@ -398,8 +398,8 @@ module RAM32X1D (
     .A0(A0), .A1(A1), .A2(A2), .A3(A3), .A4(A4),
     .DPRA0(DPRA0), .DPRA1(DPRA1), .DPRA2(DPRA2), .DPRA3(DPRA3), .DPRA4(DPRA4)
   );
-  $__ABC9_RAM6 spo (.A($SPO), .S({1'b1, A4, A3, A2, A1, A0}), .Y(SPO));
-  $__ABC9_RAM6 dpo (.A($DPO), .S({1'b1, DPRA4, DPRA3, DPRA2, DPRA1, DPRA0}), .Y(DPO));
+  $__ABC9_RAM5 spo (.A($SPO), .S({A4, A3, A2, A1, A0}), .Y(SPO));
+  $__ABC9_RAM5 dpo (.A($DPO), .S({DPRA4, DPRA3, DPRA2, DPRA1, DPRA0}), .Y(DPO));
 endmodule
 
 module RAM64X1D (
